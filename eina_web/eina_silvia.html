@@ -1,0 +1,601 @@
+<!doctype html><html><head><meta charset=utf8>
+  <title>DWC Tool Sílvia</title>
+  <!--import libs-->
+    <!--vuejs-->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <!--exceljs-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.2.1/exceljs.js" integrity="sha512-Y139xHfsByvkHgAogLbFJsPh7Fd55HrWlD3n2tgd7Mhyx7sE/ePtLPNQVeWCSViDPQe6LlgeXWHMFEUBUCmrfA==" crossorigin="anonymous"></script>
+    <!--chartjs-->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <!--chartjs date adapter-->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!--chartjs zoom plugin-->
+    <script src="https://hammerjs.github.io/dist/hammer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.0"></script>
+  <!--/-->
+  <style>
+    summary:hover{
+      cursor:pointer;
+      text-decoration:underline;
+    }
+    table{
+      border-collapse:collapse;
+    }
+    th{
+      background:#ccc;
+    }
+    .center{
+      text-align:center;
+    }
+  </style>
+</head><body>
+<b>DWC - Tool for combining .xlsx files in a chart</b>
+
+<div id=app>
+  <div>
+    <table border=1 style="width:100%">
+      <thead>
+        <tr>
+          <th rowspan=2>File .xlsx selector </th>
+          <th colspan=2>Column</th>
+          <th rowspan=2>Represent as</th>
+          <th rowspan=2>Options</th>
+          <th rowspan=2>Data extracted</th>
+          <th rowspan=2>Color</th>
+        </tr>
+        <tr>
+          <th>date</th>
+          <th>data</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="fh,i in file_holders" :style="{background:fh.worksheet?'#eee':''}">
+          <td>
+            <div>FILE {{i+1}} - {{File_holder.file_types[fh.file_type]}}</div>
+            <input type=file accept=".xlsx" @change="import_excel(event,fh)" :disabled="fh.worksheet!=null" :id="fh.file_type">
+            <button @click="fh.clear()" :disabled="fh.worksheet==null">clear</button><br>
+          </td>
+          <td class="center">
+            <input class=center size=1 v-model="fh.column_with_date" @change="fh.column_with_date=fh.column_with_date.toUpperCase();fh.extract_data()"><br>
+          </td>
+          <td class="center">
+            <input class=center size=1 v-model="fh.column_with_data" @change="fh.column_with_data=fh.column_with_data.toUpperCase();fh.extract_data()"><br>
+          </td>
+          <td>
+            <div v-for="type in ['line','bar','scatter']">
+              <label>
+                <input
+                  type=radio
+                  @change="fh.extract_data()"
+                  v-model="fh.type_of_representation"
+                  :value="type"
+                >{{type}}
+              </label>
+            </div>
+          </td>
+          <td>
+            <!--Options-->
+            <div v-if="fh.file_type=='CSO'">
+              Height:
+              <input
+                type=number
+                v-model.number="fh.height"
+                @change="fh.extract_data()"
+                style="width:50px;text-align:right"
+              ><br>
+              Floor:
+              <input
+                type=number
+                v-model.number="fh.floor"
+                @change="fh.extract_data()"
+                style="width:50px;text-align:right"
+              >
+            </div>
+
+            <div v-if="fh.file_type=='RAIN'">
+              <div v-if="fh.type_of_representation=='bar'">
+                Ceiling:
+                <input type=number
+                  v-model.number="fh.ceiling"
+                  @change="fh.extract_data()"
+                  style="width:50px;text-align:right"
+                >
+              </div>
+            </div>
+
+            <div v-if="fh.file_type=='LEVEL'">
+              <div>
+                Threshold:
+                <input type=number v-model.number="fh.threshold" @change="fh.extract_data()" style="width:50px;text-align:right">
+              </div>
+              <div>
+                Step:
+                <input type=number v-model.number="fh.step" @change="fh.extract_data()" style="width:50px;text-align:right"> minutes
+              </div>
+            </div>
+
+            <div v-if="fh.file_type=='ALARMS'">
+              Column "keywords":
+              <input
+                v-model="fh.column_keywords"
+                @change="fh.column_keywords=fh.column_keywords.toUpperCase();fh.extract_data()"
+                style="width:50px;text-align:center"
+              ><br>
+              Alarm height:
+              <input
+                type=number
+                v-model.number="fh.height"
+                @change="fh.extract_data()"
+                style="width:50px;text-align:right"
+              >
+            </div>
+
+            <div v-if="fh.file_type=='TEMPERATURE'">
+              Column "id sensor":
+              <input
+                v-model="fh.column_id_sensor"
+                @change="fh.column_id_sensor=fh.column_id_sensor.toUpperCase();fh.extract_data()"
+                style="width:50px;text-align:center"
+              >
+            </div>
+          </td>
+          <td style="font-size:smaller">
+            <details v-if="true">
+              <summary>see {{fh.extracted_data.length}} rows</summary>
+              <div>20 first values...</div>
+              <div v-for="row in fh.extracted_data.slice(0,20)">
+                {{row}}
+              </div>
+            </details>
+            <div v-else>{{fh.extracted_data.length}} rows</div>
+          </td>
+          <td>
+            <div v-if="fh.file_type!='ALARMS' && fh.file_type!='TEMPERATURE'">
+              <input type=color v-model="fh.color">
+              <button @click="fh.color=fh.default_color" :disabled="fh.color==fh.default_color">default color</button>
+            </div>
+
+            <div v-if="fh.file_type=='ALARMS' && fh.worksheet">
+              <div style="font-size:x-small;">
+                <div v-for="obj,keyword in fh.alarm_and_online_sensors_options">
+                  <div style="margin-right:1px">
+                    <input type=checkbox v-model="obj.enabled">
+                    <input type=color v-model="obj.color">
+                    <span>{{keyword}}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="fh.file_type=='TEMPERATURE' && fh.worksheet">
+              <table>
+                <tr v-for="id_sensor in get_ids_sensors()">
+                  <td>
+                    <input type=color v-model="fh.sensor_colors[id_sensor]" @change="draw_chart()">
+                    {{id_sensor}}
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top:1px">
+      <div>
+        <button @click="draw_chart()">redraw (reset zoom)</button>
+        Mín Y value:<input type=number v-model.number="min_y_value">
+        Max Y value:<input type=number v-model.number="max_y_value">
+      </div>
+      <canvas id=chart width=1000 height=600>chart goes here</canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+  //class for binding data loaded from excel files
+  class File_holder{
+    constructor(file_type, column_with_date, column_with_data, type_of_representation,color){
+      this.file_type              = file_type; //description of file
+      this.worksheet              = null; //File xlsx loaded
+      this.column_with_date       = column_with_date; //String, ie. "A" (column letter in excel file)
+      this.column_with_data       = column_with_data; //String, ie. "B" (column letter in excel file)
+      this.type_of_representation = type_of_representation; //string, ie. "bar", "line", "point", etc
+      this.extracted_data         = []; //data extracted from the file array of points [{x:0,y:0},...]
+
+      //general color for the chart (string)
+      this.color         = color;
+      this.default_color = color;
+
+      //options
+      this.height           =  40; //for "CSO data". Height of CSO events
+      this.floor            =   0; //for "CSO data". Lower value of CSO events
+      this.ceiling          = 100; //for "Rain data" floating bar
+      this.threshold        =  30; //for "Level sensor"
+      this.step             =  20; //minutes | for "Level sensor"
+      this.column_id_sensor = "A"; //for "Raw Temperature data (offline)"
+      this.column_keywords  = "A"; //for "Alarms and Temperature (online)"
+
+      if(this.file_type=="ALARMS"){
+        this.alarm_and_online_sensors_options={
+          "ALARM_CAPACITIVE" : {enabled:true, color:get_random_color()},
+          "ALARM_CSO"        : {enabled:true, color:get_random_color()},
+          "ALARM_LEVEL"      : {enabled:true, color:get_random_color()},
+          "CAPACITIVE"       : {enabled:true, color:get_random_color()},
+          "LEVEL"            : {enabled:true, color:get_random_color()},
+          "TEMPERATURE_1"    : {enabled:true, color:get_random_color()},
+          "TEMPERATURE_2"    : {enabled:true, color:get_random_color()},
+        };
+      }
+
+      if(this.file_type=="TEMPERATURE"){
+        this.sensor_colors={
+          //format: id_sensor => color
+        };
+      }
+    }
+
+    //types of .xlsx files loaded
+    static get file_types(){
+      return {
+        "CSO"         : "CSO data",
+        "RAIN"        : "Rain data",
+        "LEVEL"       : "Level sensor",
+        "ALARMS"      : "Alarms and Temperature (online)",
+        "TEMPERATURE" : "Raw Temperature (offline)",
+      }
+    }
+
+    static get alarm_and_online_sensors_keywords(){
+      return {
+        "ALARM_CAPACITIVE" : {type:"boolean"},
+        "ALARM_CSO"        : {type:"boolean"},
+        "ALARM_LEVEL"      : {type:"boolean"},
+        "CAPACITIVE"       : {type:"boolean"},
+        "LEVEL"            : {type:"number"},
+        "TEMPERATURE_1"    : {type:"number"},
+        "TEMPERATURE_2"    : {type:"number"},
+      };
+    }
+
+    clear(){
+      this.worksheet=null;
+      this.extracted_data=[];
+      document.getElementById(this.file_type).value="";
+    }
+
+    extract_data(){
+      if(!this.worksheet) return;
+
+      //process each file type according to its structure
+      if(this.file_type=="CSO"){
+        let column_x = this.worksheet._columns.find(c=>c.letter==this.column_with_date);
+        if(!column_x) throw(`column not found in letter "${this.column_with_date}"`);
+
+        let column_y = this.worksheet._columns.find(c=>c.letter==this.column_with_data);
+        if(!column_y) throw(`column not found in letter "${this.column_with_data}"`);
+
+        let values_x = column_x.values.slice(2); //skip first 2 values
+        let values_y = column_y.values.slice(2); //skip first 2 values
+
+        //transform data
+        let extracted_data=[];
+        values_x.forEach((val,i)=>{
+          let date_str_converted   = convert_datetime_str_format(val);
+          let start_date           = new Date(date_str_converted);
+          let minutes              = values_y[i];
+          let end_date             = new Date(start_date.getTime()+minutes*60*1000);
+          extracted_data.push({x:start_date, y:this.height});
+          extracted_data.push({x:end_date,   y:this.floor});
+        });
+        this.extracted_data = extracted_data;
+        return;
+      }
+
+      if(this.file_type=="RAIN"){
+        let column_x = this.worksheet._columns.find(c=>c.letter==this.column_with_date);
+        if(!column_x) throw(`column not found in letter "${this.column_with_date}"`);
+
+        let column_y = this.worksheet._columns.find(c=>c.letter==this.column_with_data);
+        if(!column_y) throw(`column not found in letter "${this.column_with_data}"`);
+
+        let values_x = column_x.values.slice(2); //skip first 2 values
+        let values_y = column_y.values.slice(2); //skip first 2 values
+
+        //transform data
+        let extracted_data=[];
+        values_x.forEach((val,i)=>{
+          if(values_y[i]==0) return;
+
+          let date_str_converted = convert_datetime_str_format(val);
+          let time = new Date(date_str_converted);
+
+          if(this.type_of_representation=="bar"){
+            extracted_data.push({x:time, y:[this.ceiling, this.ceiling-values_y[i]]});
+          }else{
+            extracted_data.push({x:time, y:values_y[i]});
+          }
+        });
+        this.extracted_data=extracted_data;
+        return;
+      }
+
+      if(this.file_type=="LEVEL"){
+        let column_x = this.worksheet._columns.find(c=>c.letter==this.column_with_date);
+        if(!column_x) throw(`column not found in letter "${this.column_with_date}"`);
+
+        let column_y = this.worksheet._columns.find(c=>c.letter==this.column_with_data);
+        if(!column_y) throw(`column not found in letter "${this.column_with_data}"`);
+
+        let values_x = column_x.values.slice(2); //skip first 7 values
+        let values_y = column_y.values.slice(2); //skip first 7 values
+
+        //transform data
+        let extracted_data=[];
+        values_x.forEach((val,i)=>{
+          if(!values_y[i]) return;
+          if(i%this.step!=0) return;
+
+          let date_str_converted = convert_datetime_str_format(val);
+          let time = new Date(date_str_converted);
+          let level = Math.max(0, values_y[i]-this.threshold);
+          extracted_data.push({x:time, y:level});
+        });
+
+        this.extracted_data=extracted_data;
+        return;
+      }
+
+      if(this.file_type=="ALARMS"){
+        let column_A = this.worksheet._columns.find(c=>c.letter==this.column_keywords);
+        if(!column_A) throw(`column not found in letter "${this.column_keywords}"`);
+
+        let column_x = this.worksheet._columns.find(c=>c.letter==this.column_with_date);
+        if(!column_x) throw(`column not found in letter "${this.column_with_date}"`);
+
+        let column_y = this.worksheet._columns.find(c=>c.letter==this.column_with_data);
+        if(!column_y) throw(`column not found in letter "${this.column_with_data}"`);
+
+        let keywords = column_A.values.slice(2); //skip first 2 values
+        let values_x = column_x.values.slice(2); //skip first 2 values
+        let values_y = column_y.values.slice(2); //skip first 2 values
+
+        //transform data
+        let extracted_data=[];
+        values_x.forEach((val,i)=>{
+          if(values_y[i]=="false") return;
+          if(values_y[i]=="true"){
+            values_y[i] = this.height;
+          }else{
+            values_y[i] = parseFloat(values_y[i]);
+          }
+
+          let date_str_converted = convert_datetime_str_format(val);
+          let time = new Date(date_str_converted);
+          extracted_data.push({x:time, y:values_y[i], keyword:keywords[i]});
+        });
+        this.extracted_data = extracted_data;
+        return;
+      }
+
+      if(this.file_type=="TEMPERATURE"){
+        let column_A = this.worksheet._columns.find(c=>c.letter==this.column_id_sensor);
+        if(!column_A) throw(`column not found in letter "${this.column_id_sensor}"`);
+
+        let column_x = this.worksheet._columns.find(c=>c.letter==this.column_with_date);
+        if(!column_x) throw(`column not found in letter "${this.column_with_date}"`);
+
+        let column_y = this.worksheet._columns.find(c=>c.letter==this.column_with_data);
+        if(!column_y) throw(`column not found in letter "${this.column_with_data}"`);
+
+        let ids_sensors = column_A.values.slice(2); //skip first 2 values
+        let values_x    = column_x.values.slice(2); //skip first 2 values
+        let values_y    = column_y.values.slice(2); //skip first 2 values
+
+        //transform data
+        let extracted_data=[];
+        values_x.forEach((val,i)=>{
+          let date_str_converted = convert_datetime_str_format(val);
+          let time = new Date(date_str_converted);
+          extracted_data.push({x:time, y:values_y[i], id_sensor:ids_sensors[i]});
+        });
+        this.extracted_data = extracted_data;
+
+        let ids_sensors_set = new Set(this.extracted_data.map(obj=>obj.id_sensor));
+        ids_sensors_set.forEach(id=>{
+          if(this.sensor_colors[id]===undefined){
+            this.sensor_colors[id]=get_random_color();
+          }
+        });
+        return;
+      }
+    }
+  }
+
+  /*Utils*/
+    function convert_datetime_str_format(date_str){
+      if(date_str.constructor===Date){
+        return date_str;
+      }
+      if(typeof(date_str)!="string"){
+        throw("date_str is not a string");
+      }
+      //convert "dd/mm/yyyy hh:MM:ss" to "yyyy-mm-dd hh:MM:ss"
+      let date_and_time = date_str.split(" ");
+      let date_split = date_and_time[0].split("/");
+      let dd   = date_split[0];
+      let mm   = date_split[1];
+      let yyyy = date_split[2];
+      return `${yyyy}-${mm}-${dd} ${date_and_time[1]}`;
+    }
+
+    function get_random_color(){
+      let color="#"
+      let chars="01234567890ABCDEF"
+      for(let i=0;i<6;i++){
+        let n = Math.floor(Math.random()*chars.length);
+        color += chars[n];
+      }
+      return color;
+    }
+  /*_*/
+
+  //Vue instance
+  let app=new Vue({
+    el:"#app",
+    data:{
+      max_y_value:100,
+      min_y_value:0,
+
+      chart:null,
+      File_holder, //class File_holder
+      file_holders:[
+        new File_holder("CSO",         "A", "B", "line", "#00ff00"),
+        new File_holder("RAIN",        "A", "B", "line",  "#0000ff"),
+        new File_holder("LEVEL",       "A", "B", "line",  "#ff0000"),
+        new File_holder("ALARMS",      "B", "C", "line", "#808080"),
+        new File_holder("TEMPERATURE", "B", "C", "line", "#800080"),
+      ],
+    },
+    methods:{
+      import_excel(event, file_holder){
+        if(event.target.value=="") return;
+        let buffer = event.target.files[0];
+        let workbook = new ExcelJS.Workbook();
+        workbook.xlsx.load(buffer).then(workbook=>{
+          workbook.eachSheet(function(worksheet,sheetId){
+            if(sheetId!=1) return;
+            file_holder.worksheet=worksheet;
+            file_holder.extract_data();
+          });
+        });
+      },
+
+      get_all_dates(){
+        let set = new Set();
+        this.file_holders.forEach(fh=>{
+          fh.extracted_data.forEach(obj=>{
+            set.add(obj.x.getTime());
+          });
+        });
+        let arr = Array.from(set);
+        arr.sort();
+        return arr.map(d=>new Date(d));
+      },
+
+      get_ids_sensors(){
+        let fh = this.file_holders.find(fh=>fh.file_type=="TEMPERATURE");
+        if(!fh || !fh.worksheet) return [];
+        let ids_sensors = new Set(fh.extracted_data.map(obj=>obj.id_sensor));
+        return Array.from(ids_sensors);
+      },
+
+      draw_chart(){
+        console.log("draw_chart() called");
+        if(this.chart) this.chart.destroy();
+
+        this.chart = new Chart(document.getElementById('chart'),{
+          data:{
+            labels:this.get_all_dates(),
+            datasets:[
+              ...this.file_holders.filter(fh=>{
+                return fh.worksheet && fh.file_type!="TEMPERATURE" && fh.file_type!="ALARMS";
+              }).map(fh=>{
+                return{
+                  type:           fh.type_of_representation,
+                  label:          File_holder.file_types[fh.file_type],
+                  backgroundColor:fh.color,
+                  borderColor:    fh.color,
+                  borderWidth:    1,
+                  data:           fh.extracted_data,
+                  stepped:        fh.file_type=="CSO"||fh.file_type=="LEVEL",
+                };
+              }),
+              //alarms and online sensors
+              ...Object.entries(File_holder.alarm_and_online_sensors_keywords).map(([keyword,obj])=>{
+                let fh = this.file_holders.find(fh=>fh.file_type=="ALARMS");
+                if(!fh.worksheet) return false;
+                if(!fh.alarm_and_online_sensors_options[keyword].enabled) return false;
+                return{
+                  label:          keyword,
+                  backgroundColor:fh.alarm_and_online_sensors_options[keyword].color,
+                  borderColor:    fh.alarm_and_online_sensors_options[keyword].color,
+                  borderWidth:    1,
+                  data:           fh.extracted_data.filter(obj=>obj.keyword==keyword),
+                  type:           obj.type=="number"?"line":fh.type_of_representation,
+                };
+              }).filter(el=>el),
+              //raw temperature data
+              ...this.get_ids_sensors().map(id_sensor=>{
+                let fh = this.file_holders.find(fh=>fh.file_type=="TEMPERATURE");
+                return{
+                  label:          `T(ºC) Sensor ${id_sensor}`,
+                  type:           fh.type_of_representation,
+                  backgroundColor:fh.sensor_colors[id_sensor],
+                  borderColor:    fh.sensor_colors[id_sensor],
+                  borderWidth:    1,
+                  data:           fh.extracted_data.filter(obj=>obj.id_sensor==id_sensor),
+                };
+              }),
+            ],
+          },
+          options:{
+            responsive:false,
+            animation:{
+              duration:0,
+            },
+            hover:{
+              animationDuration:0,
+            },
+            plugins:{
+              legend:{
+                position:"top",
+                display:true,
+              },
+              zoom:{
+                zoom:{
+                  wheel:{
+                    enabled:true,
+                  },
+                  drag:{
+                    enabled:true,
+                  },
+                  pinch:{
+                    enabled:true
+                  },
+                  mode:'xy',
+                },
+              },
+            },
+            scales:{
+              x:{
+                type:'time',
+                //offset:'true',
+                /*
+                time:{
+                  unit:'day',
+                },
+                */
+                stacked:true,
+                display:true,
+                title:{
+                  display:true,
+                  text:'Date'
+                },
+              },
+              y:{
+                min:this.min_y_value,
+                max:this.max_y_value,
+              },
+            },
+          },
+        });
+      },
+    },
+    updated(){
+      this.$nextTick(function(){
+        this.draw_chart();
+      });
+    },
+  });
+</script>
