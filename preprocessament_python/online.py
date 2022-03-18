@@ -1,5 +1,5 @@
 '''
-  Join RAIN + LEVEL + SELECTED_VARIABLES
+  Join RAIN + LEVEL + SELECTED_VARIABLES files
 
   Columns of the new file:
     * FILE2 -- date
@@ -16,7 +16,6 @@
 '''
 import datetime
 import pandas as pd
-import sys
 import time
 
 #start performance measure
@@ -176,4 +175,3 @@ print(f"Elapsed time: {elapsed_time}")
 
 #end
 input("[+] Prem Enter per sortir")
-

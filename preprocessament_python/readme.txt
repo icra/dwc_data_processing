@@ -1,4 +1,3 @@
----------------------------------------------------
 INSTRUCCIONS PER AGRUPAR ELS DIFERENTS FITXERS XLSX
 ---------------------------------------------------
 1. Fitxer 1: "online.py" -> file2 (rain), file3 (nivell), file4 (selected variables)
