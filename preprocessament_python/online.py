@@ -26,7 +26,7 @@ filenames={
   "rain"  : "RAIN.xlsx",
   "level" : "LEVEL.xlsx",
   "ssvv"  : "SELECTED_VARIABLES.xlsx",
-  "output": "new_file.xlsx",
+  "output": "output_file_online_script.xlsx",
 };
 
 #new file, with column names (and empty values)

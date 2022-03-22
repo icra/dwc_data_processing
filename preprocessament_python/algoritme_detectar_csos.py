@@ -84,8 +84,8 @@ readings=[
 
 #algorithm
 def detect_cso_episodes(readings):
-  readings_cso = []; #readings filtered
-  cso_episodes = []; #return value
+  readings_cso = []; #array of readings filtered
+  cso_episodes = []; #return value, array of episode objects
 
   for r in readings:
     date = r['date'];
@@ -95,7 +95,7 @@ def detect_cso_episodes(readings):
     diff_temp = abs(TS1-TS2+f_sensor);
     is_CSO    = diff_temp < delta_T_CSO;
     if is_CSO:
-      readings_cso.append({"date":date, "TS1":TS1, "TS2":TS2});
+      readings_cso.append({"date":date,"TS1":TS1,"TS2":TS2});
 
   #generate cso episodes, structure: {start,end}
   episode_start = 0; #null datetime
@@ -132,4 +132,5 @@ for ep in episodes_detected:
   duration = ep["end"] - ep["start"];
   print("Episode duration:",duration);
 
-input("prem enter per sortir")
+#end
+input("[+] Prem Enter per sortir")
