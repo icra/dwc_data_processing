@@ -1,24 +1,84 @@
 '''
   detect CSO episodes
+  algorithm described in "Hofer et al 2018"
 '''
 import datetime
+import pandas as pd
 
 #utility: generate a datetime interval in minutes
 def delta(minutes):
   return datetime.timedelta(minutes=minutes);
 
-#default parameters
-delta_T_CSO   = 0.3 # ºC
-f_sensor      = 0.1 # ºC
-t_delay_start = delta(2)  # timedelta (minutes)
-t_delay_end   = delta(4)  # timedelta (minutes)
-t_gap         = delta(10) # timedelta (minutes)
+#algorithm in "Hofer et al 2018" paper
+def detecta_episodis(readings, parameters):
+  #"readings" is a Pandas DataFrame with 3 columns: date, T1 (ºC), T2 (ºC)
+  #"parameters" is a dictionary with the 5 parameters needed (see below)
+
+  #parameters: (see "Hofer et al 2018" paper)
+  delta_T_CSO   = parameters["delta_T_CSO"  ]; # ºC
+  f_sensor      = parameters["f_sensor"     ]; # ºC
+  t_delay_start = delta(parameters["t_delay_start"]); # timedelta (minutes)
+  t_delay_end   = delta(parameters["t_delay_end"  ]); # timedelta (minutes)
+  t_gap         = delta(parameters["t_gap"        ]); # timedelta (minutes)
+
+  #prepare data
+  cso_timestamps = []; #auxiliar array for timestamps with a cso detected
+  cso_episodes   = []; #array for cso episode detected (objects) (RETURN VALUE)
+  cols           = readings.columns; #get names of columns from the dataframe
+
+  for i,row in readings.iterrows():
+    date = row[cols[0]]; #datetime
+    TS1  = row[cols[1]]; #temperature sensor 1
+    TS2  = row[cols[2]]; #temperature sensor 2
+
+    diff_temp = abs(TS1-TS2+f_sensor);
+    cso_detected = diff_temp <= delta_T_CSO;
+
+    #append datetime to "cso_timestamps"
+    if(cso_detected):
+      cso_timestamps.append(date);
+
+  #generate cso episodes, structure: {start,end}
+  episode_start = 0; #null datetime
+  episode_end   = 0; #null datetime
+
+  for i in range(len(cso_timestamps)):
+    curr_ts = cso_timestamps[i]; #current timestamp
+    if(i==0):
+      episode_start = curr_ts - t_delay_start;
+      continue;
+
+    if( (curr_ts - cso_timestamps[i-1]) > t_gap):
+      episode_end = cso_timestamps[i-1] - t_delay_end; #datetime
+      cso_episodes.append({
+        "start": episode_start,
+        "end": episode_end,
+      });
+      episode_start = curr_ts - t_delay_start; #datetime
+
+  episode_end = cso_timestamps[-1] - t_delay_end; #datetime
+  cso_episodes.append({
+    "start": episode_start,
+    "end":   episode_end,
+  });
+
+  return cso_episodes;
+
+# TEST
+'''
+#default parameters: (see "Hofer et al 2018" paper)
+parameters={
+  "delta_T_CSO"   : 0.3, # ºC
+  "f_sensor"      : 0.1, # ºC
+  "t_delay_start" :   2, # minutes
+  "t_delay_end"   :   4, # minutes
+  "t_gap"         :  10, # minutes
+};
 
 # generate example data
+# 3columns: datetime, TemperatureSensor_1, TemperatureSensor_2
 day_0 = datetime.datetime(2000,1,1); #datetime: 2000-01-01 00:00:00
-
-#datetime, Temperature sensor 1, Temperature sensor 2
-readings=[
+readings=pd.DataFrame([
   {"date":day_0,            "TS1":27.665, "TS2":25.362},
   {"date":day_0+delta(10),  "TS1":27.665, "TS2":25.326},
   {"date":day_0+delta(20),  "TS1":27.665, "TS2":25.326},
@@ -80,57 +140,15 @@ readings=[
   {"date":day_0+delta(580), "TS1":26.891, "TS2":24.73 },
   {"date":day_0+delta(590), "TS1":26.911, "TS2":26.911},
   {"date":day_0+delta(600), "TS1":26.911, "TS2":26.911},
-];
-
-#algorithm
-def detect_cso_episodes(readings):
-  readings_cso = []; #array of readings filtered
-  cso_episodes = []; #return value, array of episode objects
-
-  for r in readings:
-    date = r['date'];
-    TS1  = r['TS1'];
-    TS2  = r['TS2'];
-
-    diff_temp = abs(TS1-TS2+f_sensor);
-    is_CSO    = diff_temp < delta_T_CSO;
-    if is_CSO:
-      readings_cso.append({"date":date,"TS1":TS1,"TS2":TS2});
-
-  #generate cso episodes, structure: {start,end}
-  episode_start = 0; #null datetime
-  episode_end   = 0; #null datetime
-
-  for i in range(len(readings_cso)):
-    r = readings_cso[i];
-    if(i==0):
-      episode_start = r["date"] - t_delay_start;
-      continue;
-
-    if( (r["date"]-readings_cso[i-1]["date"]) > t_gap):
-      episode_end = readings_cso[i-1]["date"] - t_delay_end; #datetime
-      cso_episodes.append({
-        "start": episode_start,
-        "end": episode_end,
-      });
-      episode_start = r["date"] - t_delay_start; #datetime
-
-  episode_end = readings_cso[-1]["date"] - t_delay_end; #datetime
-  cso_episodes.append({
-    "start": episode_start,
-    "end": episode_end,
-  });
-
-  return cso_episodes;
+]);
 
 #execute algorithm with the example data generated
-episodes_detected = detect_cso_episodes(readings);
+episodes = detecta_episodis(readings, parameters);
 
 #print episodes detected
-for ep in episodes_detected:
+for ep in episodes:
   print(ep)
   duration = ep["end"] - ep["start"];
-  print("Episode duration:",duration);
-
+  print("Episode duration:",duration,'\n');
 #end
-input("[+] Prem Enter per sortir")
+'''
